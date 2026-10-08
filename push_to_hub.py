@@ -18,6 +18,11 @@ import os
 import sys
 from pathlib import Path
 from huggingface_hub import HfApi, create_repo
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 from config import HF_MODEL_DIR
 
 
