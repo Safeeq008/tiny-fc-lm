@@ -1,0 +1,70 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1 Generate Synthetic Data",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/gen_data.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "2 Train Tokenizer",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/train_tok.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "3 Train TinyLM Model",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/train.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "4 Evaluate Benchmark",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/eval.py",
+      "args": ["--split", "all"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "5 Interactive Chat / Infer",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/infer.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "6 Serve FastAPI Web Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/serve.py",
+      "args": ["8000"],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "7 Train Llama-Arch Twin",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/train_llama.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "8 Export to GGUF",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/export_gguf.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "9 Export to Hugging Face",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/export_hf.py",
+      "console": "integratedTerminal"
+    }
+  ]
+}

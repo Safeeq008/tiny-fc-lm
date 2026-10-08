@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TinyLM — 0.47M Function-Calling Router Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(22, 27, 46, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --accent-green: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --code-bg: #070a12;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg) 70%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 820px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #ffffff 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      max-width: 580px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 14px 18px;
+      font-size: 1rem;
+      font-family: inherit;
+      background: rgba(11, 15, 25, 0.8);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    button.btn-primary {
+      padding: 14px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: inherit;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      color: #0b0f19;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    button.btn-primary:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--accent-glow);
+    }
+
+    button.btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .sample-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .sample-prompts span {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-right: 4px;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .chip:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .meta-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+    }
+
+    .pill-tool {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+    }
+
+    .pill-none {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+
+    .result-section {
+      margin-top: 12px;
+    }
+
+    .call-box {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      background: var(--code-bg);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 14px;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin-bottom: 16px;
+    }
+
+    .search-results {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .search-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    .search-item a {
+      color: var(--accent);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .search-item a:hover {
+      text-decoration: underline;
+    }
+
+    .no-tool-msg {
+      padding: 16px;
+      background: rgba(251, 191, 36, 0.05);
+      border: 1px solid rgba(251, 191, 36, 0.2);
+      border-radius: 8px;
+      color: #fde68a;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .tech-spec {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .spec-item {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .spec-item .label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .spec-item .value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    details {
+      margin-top: 14px;
+    }
+
+    summary {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 0;
+    }
+
+    summary:hover {
+      color: var(--text-main);
+    }
+
+    pre.json-view {
+      margin-top: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      overflow-x: auto;
+      color: #94a3b8;
+    }
+
+    footer {
+      margin-top: auto;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding-top: 24px;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge">
+        <span class="badge-dot"></span>
+        <span>TinyLM-FC Router</span>
+      </div>
+      <h1>Tiny Function-Calling LM</h1>
+      <p class="subtitle">
+        A ~471k parameter transformer trained from scratch for high-precision
+        single-tool routing and abstention with constrained decoding.
+      </p>
+    </header>
+
+    <div class="card">
+      <div class="input-wrapper">
+        <input type="text" id="q" placeholder="Enter request, e.g. 'weather in chennai today' or 'tell me a joke'..." autofocus />
+        <button class="btn-primary" id="btn-submit" onclick="ask()">Run Router</button>
+      </div>
+
+      <div class="sample-prompts">
+        <span>Try:</span>
+        <div class="chip" onclick="setQuery('weather in chennai today')">🌦️ Chennai Weather</div>
+        <div class="chip" onclick="setQuery('who is alan turing')">👤 Alan Turing</div>
+        <div class="chip" onclick="setQuery('nvidia stock price today')">📈 Nvidia Stock</div>
+        <div class="chip" onclick="setQuery('how to bake sourdough bread')">🍞 Sourdough Guide</div>
+        <div class="chip" onclick="setQuery('ps5 price')">🎮 PS5 Price</div>
+        <div class="chip" onclick="setQuery('tell me a joke')">💬 Chit-chat (Abstain)</div>
+      </div>
+    </div>
+
+    <div class="card" id="output-card" style="display: none;">
+      <div class="meta-bar">
+        <div class="meta-item">
+          <span>Routing Decision:</span>
+          <span id="decision-pill" class="pill pill-tool">web_search</span>
+        </div>
+        <div class="meta-item">
+          <span>Latency:</span>
+          <span id="latency-pill" class="pill">0.0 ms</span>
+        </div>
+      </div>
+
+      <div class="result-section">
+        <div class="meta-item" style="margin-bottom: 6px;">
+          <span>Generated Tool Call:</span>
+        </div>
+        <div class="call-box" id="raw-call">...</div>
+
+        <div class="meta-item" style="margin-bottom: 6px;">
+          <span>Execution Output:</span>
+        </div>
+        <div id="execution-container"></div>
+
+        <details>
+          <summary>View raw JSON payload</summary>
+          <pre class="json-view" id="json-output"></pre>
+        </details>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size: 1.1rem; margin-bottom: 12px; font-weight: 600;">Model Architecture & Design</h2>
+      <div class="tech-spec">
+        <div class="spec-item">
+          <div class="label">Total Parameters</div>
+          <div class="value">471,760 (~0.47M)</div>
+        </div>
+        <div class="spec-item">
+          <div class="label">Layers / Heads</div>
+          <div class="value">4 Layers / 4 Heads</div>
+        </div>
+        <div class="spec-item">
+          <div class="label">Model Dim (d_model)</div>
+          <div class="value">80 (Head Dim = 20)</div>
+        </div>
+        <div class="spec-item">
+          <div class="label">Vocabulary</div>
+          <div class="value">2,048 BPE Tokens</div>
+        </div>
+        <div class="spec-item">
+          <div class="label">Position Encoding</div>
+          <div class="value">RoPE (Rotary)</div>
+        </div>
+        <div class="spec-item">
+          <div class="label">Inference Mode</div>
+          <div class="value">Constrained Prefix</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      TinyLM Project · Open source demonstration of edge function-calling · <a href="/docs" target="_blank">OpenAPI Docs</a>
+    </footer>
+  </div>
+
+  <script>
+    function setQuery(text) {
+      document.getElementById('q').value = text;
+      ask();
+    }
+
+    async function ask() {
+      const input = document.getElementById('q');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const outCard = document.getElementById('output-card');
+      const btn = document.getElementById('btn-submit');
+      const decisionPill = document.getElementById('decision-pill');
+      const latencyPill = document.getElementById('latency-pill');
+      const rawCall = document.getElementById('raw-call');
+      const execContainer = document.getElementById('execution-container');
+      const jsonView = document.getElementById('json-output');
+
+      btn.disabled = true;
+      btn.textContent = 'Routing...';
+      outCard.style.display = 'block';
+      rawCall.textContent = 'Generating...';
+      execContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.9rem;">Executing dispatch...</p>';
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Update pills
+        latencyPill.textContent = `${data.latency_ms} ms`;
+        if (data.tool) {
+          decisionPill.textContent = data.tool;
+          decisionPill.className = 'pill pill-tool';
+        } else {
+          decisionPill.textContent = 'none (abstain)';
+          decisionPill.className = 'pill pill-none';
+        }
+
+        rawCall.textContent = data.call;
+        jsonView.textContent = JSON.stringify(data, null, 2);
+
+        // Render result items
+        execContainer.innerHTML = '';
+        if (data.tool && Array.isArray(data.result)) {
+          const list = document.createElement('ul');
+          list.className = 'search-results';
+          data.result.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'search-item';
+            // Parse title - URL if present
+            if (item.includes(' - http')) {
+              const [title, url] = item.split(' - http');
+              li.innerHTML = `<strong>${escapeHtml(title)}</strong><br><a href="http${escapeHtml(url)}" target="_blank" rel="noopener">http${escapeHtml(url)}</a>`;
+            } else {
+              li.textContent = item;
+            }
+            list.appendChild(li);
+          });
+          execContainer.appendChild(list);
+        } else {
+          const box = document.createElement('div');
+          box.className = 'no-tool-msg';
+          box.innerHTML = `<span>💬</span> <span>${escapeHtml(String(data.result || 'No tool required for this input.'))}</span>`;
+          execContainer.appendChild(box);
+        }
+      } catch (err) {
+        rawCall.textContent = 'Error executing request';
+        execContainer.innerHTML = `<div style="color: var(--accent-rose); font-size: 0.9rem;">Failed to communicate with API: ${escapeHtml(err.message)}</div>`;
+        jsonView.textContent = String(err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Router';
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    document.getElementById('q').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') ask();
+    });
+  </script>
+</body>
+</html>

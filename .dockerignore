@@ -1,0 +1,10 @@
+# build context only needs the API + trained checkpoint (see DEPLOY.md)
+.venv/
+__pycache__/
+*.pyc
+.git/
+llama.cpp/
+data/
+ckpt_hf/
+hf_model/
+*.gguf

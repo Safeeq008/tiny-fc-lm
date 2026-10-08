@@ -1,0 +1,47 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Environment variables & secrets
+.env
+.env.*
+*.token
+
+# Large regenerable datasets & checkpoints
+data/*.jsonl
+!data/.gitkeep
+ckpt/*.pt
+ckpt/*.json
+!ckpt/.gitkeep
+ckpt_hf/
+hf_model/
+*.gguf
+
+# External dependencies & tools
+llama.cpp/
+
+# Archives & Temporary files
+*.zip
+*.rar
+*.tar.gz
+*.7z
+
+# IDE & Editor files (keep launch.json for easy reproduction)
+.vscode/*
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini

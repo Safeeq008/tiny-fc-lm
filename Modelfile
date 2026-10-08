@@ -1,0 +1,21 @@
+FROM ./tinyfc.gguf
+
+# TinyLM Ollama Modelfile
+# -----------------------
+# Architectural twin of TinyLM trained using Llama-compatible tensor layout.
+# This template configures Ollama as a deterministic single-turn router.
+#
+# Technical Design:
+# 1. Single-Turn Filtering: Extracts only the most recent user turn from .Messages.
+#    This prevents conversational history leakage where previous tool results
+#    or queries pollute subsequent routing decisions.
+# 2. Strict Delimiters: Wraps the input prompt exactly as "<user> <prompt> <call>".
+# 3. Stop Sequence: Halts token emission immediately upon predicting "<end>".
+# 4. Temperature 0: Forces greedy argmax token selection for deterministic routing.
+
+TEMPLATE """{{- if .Messages }}{{ $p := "" }}{{ range .Messages }}{{ if eq .Role "user" }}{{ $p = .Content }}{{ end }}{{ end }}<user> {{ $p }} <call>{{- else }}<user> {{ .Prompt }} <call>{{- end }}"""
+
+PARAMETER stop "<end>"
+PARAMETER temperature 0
+PARAMETER top_k 1
+PARAMETER top_p 1.0
