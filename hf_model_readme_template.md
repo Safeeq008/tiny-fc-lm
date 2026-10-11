@@ -180,18 +180,35 @@ with torch.no_grad():
 
 ## 📊 Benchmarks
 
-| Metric | Val (In-Distribution) | OOD (Held-Out Phrasings) |
-| :--- | :---: | :---: |
-| **Exact Match Accuracy** | **~99.8%** | **~88.2%** |
-| **Routing Decision Accuracy** | **99.9%** | **96.4%** |
-| **Routing Precision (Tool)** | **99.9%** | **97.1%** |
-| **Routing Recall (Tool)** | **99.9%** | **98.8%** |
-| **Query Slot Exact Match** | **99.8%** | **89.5%** |
-| **Recency Slot Accuracy** | **99.9%** | **97.2%** |
-| **Syntactic Validity Rate** | **100.0%** | **99.8%** |
-| **CPU Inference Latency** | **~3.2 ms** | **~3.4 ms** |
+Evaluated on 2,000 in-distribution samples (`val.jsonl`), 1,000 held-out phrasing samples (`test_ood.jsonl`), and 1,000 domain-shift samples (`test_ood_domain.jsonl`):
 
-> OOD = templates strictly held-out from training (unseen surface forms, same entity pools).
+| Metric | Val (In-Distribution) | Phrasing OOD (Held-Out Phrasings) | Domain Shift OOD (Novel Entities & Global) |
+| :--- | :---: | :---: | :---: |
+| **Exact Match Accuracy** | **99.90%** | **82.90%** | **0.40%** *(entity vocabulary bounded)* |
+| **Routing Decision Accuracy** | **99.95%** | **89.50%** | **95.40%** |
+| **Routing Precision (Tool)** | **100.00%** | **89.15%** | **100.00%** |
+| **Routing Recall (Tool)** | **99.95%** | **99.40%** | **95.40%** |
+| **Query Slot Exact Match** | **99.90%** | **82.90%** | **0.40%** |
+| **Recency Slot Accuracy** | **99.90%** | **84.90%** | **54.60%** |
+| **Syntactic Validity Rate** | **100.0%** | **99.80%** | **99.30%** |
+| **CPU Inference Latency** | **~23.8 ms** | **~24.0 ms** | **~27.8 ms** |
+
+### Per-Intent Performance (Phrasing OOD)
+
+Key utility intents have been fortified against phrasing shifts and temporal ambiguity:
+
+| Intent Category | Val Exact % | OOD Exact % | OOD Routing % | Status |
+| :--- | :---: | :---: | :---: | :--- |
+| **How-to / Guides** | 100.0% | **100.0%** | 100.0% | **Resolved (was 86.4%)** |
+| **Sports Scores** | 100.0% | **100.0%** | 100.0% | **Resolved (was 88.5%)** |
+| **Product Prices** | 100.0% | **96.2%** | 100.0% | **Resolved (was 84.8%)** |
+| **General Concept** | 100.0% | **98.8%** | 98.8% | High fidelity |
+| **Weather** | 99.4% | **97.4%** | 100.0% | High fidelity |
+| **Stock Quotes** | 100.0% | **96.2%** | 100.0% | High fidelity |
+| **Web Search** | 100.0% | **100.0%** | 100.0% | High fidelity |
+| **Weekly Recap** | 100.0% | **80.3%** | 100.0% | 100% routing fidelity |
+| **News** | 99.7% | **56.4%** | 97.0% | 97% routing fidelity |
+| **Chit-Chat (Abstain)** | 100.0% | **41.0%** | 42.2% | Abstract banter vs tool call |
 
 ---
 
@@ -241,10 +258,10 @@ Full pipeline available at [github.com/Safeeq008/tiny-fc-lm](https://github.com/
 git clone https://github.com/Safeeq008/tiny-fc-lm.git
 cd tiny-fc-lm && pip install -r requirements.txt
 
-python gen_data.py      # 1. Generate 80k synthetic training samples
+python gen_data.py      # 1. Generate 80k synthetic training samples (train, val, phrasing OOD, domain OOD)
 python train_tok.py     # 2. Train custom 2048-vocab BPE tokenizer
 python train.py         # 3. Train TinyLM-FC model (~5-10 min, CPU)
-python eval.py          # 4. Full benchmark suite (val + OOD)
+python eval.py          # 4. Full benchmark suite across all splits
 python infer.py         # 5. Interactive CLI with live DuckDuckGo search
 python serve.py 8000    # 6. FastAPI server + web UI
 
@@ -261,7 +278,7 @@ ollama create tinyfc -f Modelfile && ollama run tinyfc
 1. **Single-tool**: Strictly routes `web_search` only — no multi-tool schemas.
 2. **English only**: Custom BPE tokenizer trained on English synthetic corpus.
 3. **80-token context window**: Inputs > ~60 user tokens are silently truncated.
-4. **Synthetic training data**: Real-world query distributions are far noisier; OOD generalization is limited to phrasing variation, not domain shift.
+4. **Synthetic training data & domain shift boundary**: Real-world query distributions are far noisier. While **tool routing transfers at 95.40%** to novel domains and unobserved tasks, **exact entity string extraction is bounded by the 0.47M parameter vocabulary** for unseen entities.
 5. **Constrained decoding required**: Raw greedy decoding may produce malformed outputs; use `infer.py`'s constrained decoder for production.
 
 ---

@@ -1,6 +1,6 @@
 # Tiny Function-Calling LM (TinyLM-FC)
 
-[![Model on HF](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model%20Weights-blue)](https://huggingface.co/Safeeq/tiny-fc-lm)
+[![Model on HF](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model%20Weights-blue)](https://huggingface.co/Safeeq/FCtiny)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![Model Size](https://img.shields.io/badge/Parameters-~0.47M-red.svg)](#architecture)
@@ -150,38 +150,52 @@ python infer.py   # interactive REPL
 
 ## Benchmarks & Evaluation Rigor
 
-Evaluated on 2,000 in-distribution samples (`val.jsonl`) and 1,000 out-of-distribution phrasing samples (`test_ood.jsonl`) using [`eval.py`](eval.py):
+Evaluated on 2,000 in-distribution samples (`val.jsonl`), 1,000 out-of-distribution phrasing samples (`test_ood.jsonl`), and 1,000 domain-shift samples (`test_ood_domain.jsonl`) using [`eval.py`](eval.py):
 
-| Evaluation Metric | Validation Split (In-Distribution) | OOD Split (Held-Out Phrasings) |
-| :--- | :---: | :---: |
-| **Total Test Samples ($N$)** | 2,000 | 1,000 |
-| **Exact Match Accuracy** | **99.85%** | **88.20%** |
-| **Routing Accuracy (Tool vs Abstain)**| **99.95%** | **96.40%** |
-| **Routing Precision** | **99.94%** | **97.12%** |
-| **Routing Recall** | **100.00%** | **98.81%** |
-| **Routing F1-Score** | **99.97%** | **97.96%** |
-| **Query Slot Exact Match** | **99.85%** | **89.50%** |
-| **Recency Slot Exact Match** | **99.95%** | **97.20%** |
-| **Syntactic Conformance Rate** | **100.00%** | **99.80%** |
-| **Mean Inference Latency** | **3.21 ms / query** | **3.38 ms / query** |
+| Evaluation Metric | Validation Split (In-Distribution) | Phrasing OOD (Held-Out Phrasings) | Domain Shift OOD (Novel Entities & Global) |
+| :--- | :---: | :---: | :---: |
+| **Total Test Samples ($N$)** | 2,000 | 1,000 | 1,000 |
+| **Exact Match Accuracy** | **99.90%** | **82.90%** | **0.40%** *(entity vocabulary bounded)* |
+| **Routing Accuracy (Tool vs Abstain)**| **99.95%** | **89.50%** | **95.40%** |
+| **Routing Precision** | **100.00%** | **89.15%** | **100.00%** |
+| **Routing Recall** | **99.95%** | **99.40%** | **95.40%** |
+| **Routing F1-Score** | **99.97%** | **94.00%** | **97.65%** |
+| **Query Slot Exact Match** | **99.90%** | **82.90%** | **0.40%** |
+| **Recency Slot Exact Match** | **99.90%** | **84.90%** | **54.60%** |
+| **Syntactic Conformance Rate** | **100.00%** | **99.80%** | **99.30%** |
+| **Mean Inference Latency** | **23.8 ms / query** | **24.0 ms / query** | **27.8 ms / query** |
 
-*Hardware: Intel Core i7 / AMD Ryzen CPU single-thread execution, PyTorch 2.x.*
+*Hardware: CPU single-thread execution, PyTorch 2.x.*
 
 ---
 
 ## Per-Intent Analysis
 
-Performance broken down by intent category across the test suites:
+Performance broken down by intent category across validation and phrasing OOD:
 
-| Intent Category | Val Exact % | OOD Exact % | Primary Failure Mode |
-| :--- | :---: | :---: | :--- |
-| **Weather** | 100.0% | 94.2% | Synonyms like "climate conditions" slightly shift query phrasing |
-| **Stock Quotes** | 100.0% | 92.0% | Unseen phrasings ("market value") occasionally drop "stock price" suffix |
-| **Sports Scores** | 99.8% | 88.5% | Missing temporal indicator on multi-word team names |
-| **How-to / Guides** | 100.0% | 86.4% | Template shifts ("walk me through") produce minor word order variations |
-| **Product Prices** | 99.6% | 84.8% | Colloquial expressions ("what's the damage for") occasionally mistranslated |
-| **Person Bios** | 100.0% | 91.5% | Minor entity casing / prefix tokenization differences |
-| **Chit-Chat (Abstain)**| 99.8% | 98.4% | Metaphorical language ("you made my day") occasionally triggers search |
+| Intent Category | Val Exact % | OOD Exact % | OOD Routing % | Status & Failure Analysis |
+| :--- | :---: | :---: | :---: | :--- |
+| **How-to / Guides** | 100.0% | **100.0%** | 100.0% | **Fixed (was 86.4%)**: Expanded with beginner/urgency templates and temporal grounding |
+| **Sports Scores** | 100.0% | **100.0%** | 100.0% | **Fixed (was 88.5%)**: Added explicit match day temporal cues ("last night", "today") |
+| **Product Prices** | 100.0% | **96.2%** | 100.0% | **Fixed (was 84.8%)**: Expanded retail phrasing, currency variations, and colloquial queries |
+| **General Concept** | 100.0% | **98.8%** | 98.8% | Robust definition and explanatory retrieval |
+| **Weather** | 99.4% | **97.4%** | 100.0% | High fidelity; rare phrasing variations ("climate conditions") |
+| **Stock Quotes** | 100.0% | **96.2%** | 100.0% | High fidelity; rare market value phrasing shifts |
+| **Web Search** | 100.0% | **100.0%** | 100.0% | Direct search instruction parsing |
+| **Weekly Recap** | 100.0% | **80.3%** | 100.0% | 100% routing; slot variations on 7-day framing vs weekly |
+| **News** | 99.7% | **56.4%** | 97.0% | 97% routing; queries like "get me up to speed" occasionally default recency |
+| **Chit-Chat (Abstain)**| 100.0% | **41.0%** | 42.2% | Abstract banter ("do you dream", "what should we talk about") vs search queries |
+
+---
+
+## Synthetic Training Data & Domain Shift Findings
+
+We explicitly separate and evaluate two distinct dimensions of out-of-distribution generalization:
+
+1. **Phrasing Generalization (`test_ood.jsonl`)**: Unseen surface templates for known entities. The model achieves **89.50% routing accuracy** and **82.90% exact match**, with 96–100% accuracy on critical utility intents (prices, guides, scores, weather).
+2. **Domain Shift (`test_ood_domain.jsonl`)**: Evaluating entirely novel entities (e.g. non-Western cities, Indian financial tasks like GST/UPI, unobserved tech products) and noisier colloquial framing.
+   - **Tool Routing Generalizes**: The model achieves **95.40% routing accuracy** (97.65% F1) and **99.30% schema syntax conformance**, showing that the structural intent classification transfers robustly to unfamiliar domains.
+   - **Entity Extraction is Vocabulary Bounded**: At ~0.47M parameters with a 2,048-token vocabulary, exact string query extraction drops on completely unobserved entities. The model memorizes subword representations for known entity pools rather than functioning as an open-vocabulary NER engine.
 
 ---
 
@@ -190,10 +204,10 @@ Performance broken down by intent category across the test suites:
 To ensure responsible real-world usage, understand what TinyLM is **not**:
 
 1. **Single Tool Scope**: TinyLM only knows `web_search`. It cannot decide between multiple conflicting APIs (e.g. calculator vs search vs database lookup) without retraining on a multi-tool schema.
-2. **Vocabulary Memorization vs Open-World Generalization**: Because the model is 0.47M parameters, it relies heavily on memorized subword patterns. When presented with completely unseen entities (e.g. rare surnames, newly coined slang, or foreign terminology), the model may fragment the entity or default to the closest known entity vector.
+2. **Vocabulary Memorization vs Open-World Generalization**: Because the model is 0.47M parameters, it relies heavily on subword patterns from training. For completely unseen entities, downstream search should rely on the router's intent trigger and pass the raw user query to a fallback retriever.
 3. **No Generation of Answers**: TinyLM is an intent router, not an answer generator. It does not answer questions; it emits tool calls to fetch documents from search backends.
 4. **Short Context Constraint**: The maximum sequence length is 80 tokens. Any input longer than ~60 user tokens will be truncated, which can discard critical qualifying clauses at the end of long prompts.
-5. **English-Only**: Trained on English synthetic data. Non-English queries will be decomposed into byte-level fallback tokens and produce degraded routing decisions.
+5. **English-Centric**: Trained primarily on English synthetic data. Multilingual and code-switched inputs maintain intent routing signals but exhibit degraded slot spelling.
 
 ---
 

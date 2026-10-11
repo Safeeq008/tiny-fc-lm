@@ -19,8 +19,9 @@ Evaluation Dimensions & Metrics
    - Identifies specific failure modes and blind spots.
 
 4. **Robustness & Generalization**:
-   - Compares in-distribution validation (`val.jsonl`) with held-out phrasing
-     out-of-distribution (`test_ood.jsonl`).
+   - Compares in-distribution validation (`val.jsonl`) with:
+     (a) phrasing-OOD (`test_ood.jsonl`) — unseen surface forms, same entity pool.
+     (b) domain-shift OOD (`test_ood_domain.jsonl`) — new entity pools + styles.
 
 5. **Inference Latency & Throughput**:
    - Measures average latency (ms per query) and generation speed.
@@ -28,11 +29,14 @@ Evaluation Dimensions & Metrics
 Limitations & Honesty
 ---------------------
 - Metrics rely on exact match against synthetic gold labels.
-- In real life, multiple different search queries could be valid for the same user request
-  (e.g., "chennai weather" vs "weather in chennai today"). Exact match is an intentionally
-  strict lower-bound metric.
-- OOD evaluates novel template phrasings, but uses the same underlying entity pool; it does
-  not evaluate completely unseen named entities outside the training vocabulary.
+- In real life, multiple different search queries could be valid for the same
+  user request (e.g., "chennai weather" vs "weather in chennai today"). Exact
+  match is an intentionally strict lower-bound metric.
+- OOD evaluates novel template phrasings, but uses the same underlying entity
+  pool; it does not evaluate completely unseen named entities outside the
+  training vocabulary.
+- Domain-shift OOD (test_ood_domain.jsonl) goes further by using new entities
+  and phrasing styles but is still synthetic.
 """
 
 import argparse
@@ -46,26 +50,82 @@ from config import DATA_DIR, TOOLS
 from infer import load, predict, parse_call
 
 
+# ---------------------------------------------------------------------------
+# Intent classifier — fixed priority ordering prevents mis-classification
+# ---------------------------------------------------------------------------
+
 def classify_intent(user_text: str, gold_call: str) -> str:
-    """Heuristically tag intent category for per-intent metric breakdown."""
-    if gold_call.strip() == "none":
+    """Deterministically tag intent category from the *gold call* first,
+    then fall back to user-text heuristics.
+
+    Previous version relied primarily on user_text keyword matching, which
+    caused systematic mis-classifications for:
+      - product price (confused with news/concept queries)
+      - how-to (confused with general search)
+      - sports score (confused with news when user said "game")
+
+    Fix: gold_call is the ground truth — always prefer its signal.
+    """
+    g = gold_call.strip()
+
+    # ── Abstain ──────────────────────────────────────────────────────────────
+    if g == "none":
         return "chit-chat (none)"
-    if "weather" in gold_call or "temperature" in user_text:
+
+    # ── Parse the gold call for structured signal ─────────────────────────────
+    # gold format: web_search|query=<q>|recency=<r>
+    query = ""
+    recency = ""
+    if "|" in g:
+        parts = g.split("|")
+        for part in parts[1:]:
+            if part.startswith("query="):
+                query = part[len("query="):].strip()
+            elif part.startswith("recency="):
+                recency = part[len("recency="):].strip()
+
+    # ── Priority ordering (most-specific first) ───────────────────────────────
+
+    # 1. Weather — query ends in "weather today"
+    if query.endswith("weather today") or "weather" in query:
         return "weather"
-    if "stock price" in gold_call or "share" in user_text or "trading" in user_text:
+
+    # 2. Stock — query ends in "stock price"
+    if query.endswith("stock price"):
         return "stock"
-    if "score" in gold_call or "win" in user_text or "match" in user_text or "game" in user_text:
+
+    # 3. Sports score — query ends in "score"
+    if query.endswith("score"):
         return "sports score"
-    if "how to" in gold_call or "guide" in user_text or "tutorial" in user_text:
+
+    # 4. How-to — query starts with "how to"
+    if query.startswith("how to"):
         return "how-to"
-    if "price" in gold_call or "cost" in user_text or "buy" in user_text:
+
+    # 5. Product price — query ends in "price" (but not stock)
+    if query.endswith("price"):
         return "product price"
-    if "this week" in gold_call or "weekly" in user_text:
+
+    # 6. Weekly recap — recency=week
+    if recency == "week":
         return "weekly recap"
-    if "news" in gold_call:
+
+    # 7. News — query ends in "news" or "news today"
+    if query.endswith("news") or query.endswith("news today"):
         return "news"
-    if "who is" in user_text or "biography" in user_text or "who was" in user_text:
+
+    # 8. Fall back to user-text heuristics for ambiguous cases
+    u = user_text.lower()
+
+    if "who is" in u or "who was" in u or "biography" in u or "profile" in u:
         return "person bio"
+
+    if "what is" in u or "explain" in u or "define" in u or "meaning" in u:
+        return "general concept"
+
+    if "search" in u or "google" in u or "look up" in u or "find" in u:
+        return "web search"
+
     return "general concept"
 
 
@@ -81,7 +141,9 @@ def run_evaluation(model, tok, filename: str, limit: int | None = None, verbose:
     """Run full evaluation suite on a dataset split."""
     filepath = DATA_DIR / filename
     if not filepath.exists():
-        raise FileNotFoundError(f"Dataset split not found: {filepath}. Run gen_data.py first.")
+        raise FileNotFoundError(
+            f"Dataset split not found: {filepath}. Run gen_data.py first."
+        )
 
     with open(filepath, encoding="utf-8") as f:
         rows = [json.loads(line) for line in f]
@@ -209,7 +271,7 @@ def run_evaluation(model, tok, filename: str, limit: int | None = None, verbose:
         print("=" * 72)
         print(f"EVALUATION RESULTS: {filename} (N = {total:,})")
         print("=" * 72)
-        print(f"Global Metrics:")
+        print("Global Metrics:")
         print(f"  Exact Match Accuracy   : {exact_acc * 100:6.2f}% ({exact_matches}/{total})")
         print(f"  Syntax Validity Rate   : {syntax_rate * 100:6.2f}% ({valid_syntax_count}/{total})")
         print(f"  Routing Accuracy       : {routing_acc * 100:6.2f}% (TP={tp}, TN={tn}, FP={fp}, FN={fn})")
@@ -246,28 +308,45 @@ def run_evaluation(model, tok, filename: str, limit: int | None = None, verbose:
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate TinyLM Function Calling Model")
-    parser.add_argument("--split", choices=["val", "ood", "all"], default="all",
-                        help="Dataset split to evaluate on (default: all)")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="Limit number of test samples (default: full split)")
-    parser.add_argument("--json", action="store_true",
-                        help="Output evaluation results as raw JSON")
+    parser.add_argument(
+        "--split",
+        choices=["val", "ood", "domain", "all"],
+        default="all",
+        help="Dataset split to evaluate on (default: all)",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None,
+        help="Limit number of test samples (default: full split)",
+    )
+    parser.add_argument(
+        "--json", action="store_true",
+        help="Output evaluation results as raw JSON",
+    )
     args = parser.parse_args()
 
     model, tok = load()
 
+    split_files = {
+        "val": "val.jsonl",
+        "ood": "test_ood.jsonl",
+        "domain": "test_ood_domain.jsonl",
+    }
+
     splits_to_run = []
-    if args.split in ("val", "all"):
-        splits_to_run.append("val.jsonl")
-    if args.split in ("ood", "all"):
-        splits_to_run.append("test_ood.jsonl")
+    if args.split == "all":
+        splits_to_run = list(split_files.values())
+    else:
+        splits_to_run = [split_files[args.split]]
 
     all_metrics = {}
     for s in splits_to_run:
+        # Skip domain split gracefully if not yet generated
+        if not (DATA_DIR / s).exists():
+            print(f"Skipping {s} — file not found (run gen_data.py to generate).")
+            continue
         all_metrics[s] = run_evaluation(model, tok, s, limit=args.limit, verbose=not args.json)
 
     if args.json:
-        # Convert non-serializable elements
         print(json.dumps(all_metrics, indent=2, default=str))
 
 
